@@ -17,6 +17,7 @@ public class PingApp extends JFrame {
     private JTextArea resultArea;
     private JButton pingButton;
     private JButton discoverButton;
+    private JButton tracerouteButton;
     private JComboBox<String> targetsComboBox;
 
     public PingApp() {
@@ -24,19 +25,20 @@ public class PingApp extends JFrame {
     }
 
     private void createUI() {
-        setTitle("Aplicativo de Ping");
-        setSize(800, 600); // Aumentar o tamanho da janela
+        setTitle("Aplicativo de Ping e Traceroute");
+        setSize(800, 600);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
         ipField = new JTextField(15);
         resultArea = new JTextArea();
         resultArea.setEditable(false);
-        resultArea.setLineWrap(true); // Habilitar quebra de linha
-        resultArea.setWrapStyleWord(true); // Quebrar linhas em palavras
+        resultArea.setLineWrap(true);
+        resultArea.setWrapStyleWord(true);
 
         pingButton = new JButton("Ping");
         discoverButton = new JButton("Descobrir Rede");
+        tracerouteButton = new JButton("Traceroute");
         targetsComboBox = new JComboBox<>(new String[]{"Selecione um destino", "Google DNS (8.8.8.8)", "Roteador (192.168.1.1)"});
 
         JPanel panel = new JPanel();
@@ -46,6 +48,7 @@ public class PingApp extends JFrame {
         topPanel.add(new JLabel("Endereço IP:"));
         topPanel.add(ipField);
         topPanel.add(pingButton);
+        topPanel.add(tracerouteButton);
         topPanel.add(targetsComboBox);
         panel.add(topPanel, BorderLayout.NORTH);
         panel.add(new JScrollPane(resultArea), BorderLayout.CENTER);
@@ -64,6 +67,14 @@ public class PingApp extends JFrame {
             public void actionPerformed(ActionEvent e) {
                 String ipAddress = ipField.getText();
                 ping(ipAddress);
+            }
+        });
+
+        tracerouteButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                String ipAddress = ipField.getText();
+                traceroute(ipAddress);
             }
         });
 
@@ -136,7 +147,7 @@ public class PingApp extends JFrame {
             resultArea.setText("Pingando " + ipAddress + "...\n");
             ProcessBuilder processBuilder = new ProcessBuilder("ping", "-n", "4", ipAddress);
             Process process = processBuilder.start();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "CP850")); // Usar CP850 para suportar caracteres acentuados corretamente
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "CP850"));
             StringBuilder result = new StringBuilder();
             String line;
             boolean isReachable = false;
@@ -154,6 +165,23 @@ public class PingApp extends JFrame {
             }
         } catch (Exception ex) {
             resultArea.append("Erro ao tentar pingar: " + ex.getMessage() + "\n");
+        }
+    }
+
+    private void traceroute(String ipAddress) {
+        try {
+            resultArea.setText("Realizando traceroute para " + ipAddress + "...\n");
+            ProcessBuilder processBuilder = new ProcessBuilder("tracert", ipAddress);
+            Process process = processBuilder.start();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "CP850"));
+            StringBuilder result = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                result.append(line).append("\n");
+            }
+            resultArea.append(result.toString());
+        } catch (Exception ex) {
+            resultArea.append("Erro ao tentar realizar traceroute: " + ex.getMessage() + "\n");
         }
     }
 
