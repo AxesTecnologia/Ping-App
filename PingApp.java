@@ -9,7 +9,9 @@ import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class PingApp extends JFrame {
 
@@ -18,6 +20,7 @@ public class PingApp extends JFrame {
     private JButton pingButton;
     private JButton discoverButton;
     private JButton tracerouteButton;
+    private JButton bandwidthTestButton;
     private JComboBox<String> targetsComboBox;
 
     public PingApp() {
@@ -26,7 +29,7 @@ public class PingApp extends JFrame {
 
     private void createUI() {
         setTitle("Aplicativo de Ping e Traceroute");
-        setSize(800, 600);
+        setSize(1000, 700); // Aumentando o tamanho da janela
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
@@ -39,16 +42,19 @@ public class PingApp extends JFrame {
         pingButton = new JButton("Ping");
         discoverButton = new JButton("Descobrir Rede");
         tracerouteButton = new JButton("Traceroute");
+        bandwidthTestButton = new JButton("Teste de Banda");
         targetsComboBox = new JComboBox<>(new String[]{"Selecione um destino", "Google DNS (8.8.8.8)", "Roteador (192.168.1.1)"});
 
         JPanel panel = new JPanel();
         panel.setLayout(new BorderLayout());
         JPanel topPanel = new JPanel();
+        topPanel.setLayout(new FlowLayout(FlowLayout.LEFT)); // Ajustando o layout para caber mais botões
         topPanel.add(discoverButton);
         topPanel.add(new JLabel("Endereço IP:"));
         topPanel.add(ipField);
         topPanel.add(pingButton);
         topPanel.add(tracerouteButton);
+        topPanel.add(bandwidthTestButton); // Adicionando o botão de teste de banda
         topPanel.add(targetsComboBox);
         panel.add(topPanel, BorderLayout.NORTH);
         panel.add(new JScrollPane(resultArea), BorderLayout.CENTER);
@@ -78,6 +84,14 @@ public class PingApp extends JFrame {
             }
         });
 
+        bandwidthTestButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                String ipAddress = ipField.getText();
+                testBandwidth(ipAddress);
+            }
+        });
+
         targetsComboBox.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -96,6 +110,7 @@ public class PingApp extends JFrame {
     private void discoverNetwork() {
         resultArea.setText("Descobrindo dispositivos na mesma faixa de rede...\n");
         List<String> activeHosts = new ArrayList<>();
+        Map<String, String> ipMacMap = new HashMap<>();
         try {
             InetAddress localHost = InetAddress.getLocalHost();
             NetworkInterface networkInterface = NetworkInterface.getByInetAddress(localHost);
@@ -128,6 +143,19 @@ public class PingApp extends JFrame {
                     }
                 }
             }
+
+            // Get the ARP table to map IPs to MAC addresses
+            ProcessBuilder arpBuilder = new ProcessBuilder("arp", "-a");
+            Process arpProcess = arpBuilder.start();
+            BufferedReader arpReader = new BufferedReader(new InputStreamReader(arpProcess.getInputStream()));
+            String arpLine;
+            while ((arpLine = arpReader.readLine()) != null) {
+                String[] parts = arpLine.split("\\s+");
+                if (parts.length >= 3 && parts[0].matches("\\d+\\.\\d+\\.\\d+\\.\\d+")) {
+                    ipMacMap.put(parts[0], parts[1]);
+                }
+            }
+
         } catch (Exception ex) {
             resultArea.append("Erro ao obter informações da rede: " + ex.getMessage() + "\n");
         }
@@ -135,10 +163,26 @@ public class PingApp extends JFrame {
         if (!activeHosts.isEmpty()) {
             resultArea.append("Dispositivos ativos encontrados:\n");
             for (String host : activeHosts) {
-                resultArea.append(host + "\n");
+                String macAddress = ipMacMap.get(host);
+                String deviceName = getDeviceNameByMac(macAddress);
+                resultArea.append(host + " (" + (deviceName != null ? deviceName : "Desconhecido") + ")\n");
             }
         } else {
             resultArea.append("Nenhum dispositivo ativo encontrado na faixa de rede.\n");
+        }
+    }
+
+    private String getDeviceNameByMac(String macAddress) {
+        if (macAddress == null) return null;
+
+        // Here you can implement a lookup using a database or a service that provides MAC address vendor information
+        // For simplicity, let's return a mock name based on the MAC address
+        if (macAddress.startsWith("00:1A:2B")) {
+            return "Dispositivo A";
+        } else if (macAddress.startsWith("00:1C:3D")) {
+            return "Dispositivo B";
+        } else {
+            return "Fabricante Desconhecido";
         }
     }
 
@@ -185,6 +229,25 @@ public class PingApp extends JFrame {
         }
     }
 
+    private void testBandwidth(String ipAddress) {
+        try {
+            resultArea.setText("Testando banda com " + ipAddress + "...\n");
+            String iperfPath = "C:\\iperf3\\iperf3.exe";  // Altere este caminho para o local onde está o iperf3.exe
+            ProcessBuilder processBuilder = new ProcessBuilder(iperfPath, "-c", ipAddress);
+            Process process = processBuilder.start();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "CP850"));
+            StringBuilder result = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                result.append(line).append("\n");
+            }
+            resultArea.append(result.toString());
+        } catch (Exception ex) {
+            resultArea.append("Erro ao tentar realizar teste de banda: " + ex.getMessage() + "\n");
+        }
+    }
+
+
     private void analyzePingResult(String pingOutput) {
         boolean errorFound = false;
 
@@ -193,20 +256,11 @@ public class PingApp extends JFrame {
             errorFound = true;
         }
         if (pingOutput.contains("Host de destino inacessível")) {
-            resultArea.append("Erro: Host de destino inacessível. O host pode estar desconectado da rede.\n");
+            resultArea.append("Erro: Host de destino inacessível. Verifique se o endereço IP está correto e se o dispositivo está na mesma rede.\n");
             errorFound = true;
         }
-        if (pingOutput.contains("Não foi possível encontrar o host")) {
-            resultArea.append("Erro: Não foi possível encontrar o host. Verifique o endereço IP ou nome do host e tente novamente.\n");
-            errorFound = true;
-        }
-
-        // Sugestões para qualquer erro encontrado
-        if (errorFound) {
-            resultArea.append("Possíveis causas e ações:\n");
-            resultArea.append("1. Host de destino inacessível, verifique se o equipamento de destino está ligado.\n");
-            resultArea.append("2. Host inacessível, verifique se os cabos do equipamento de destino estão devidamente conectados.\n");
-            resultArea.append("3. Verifique se o endereço IP ou nome do host está correto e tente novamente.\n");
+        if (!errorFound) {
+            resultArea.append("Ping não teve sucesso por motivos desconhecidos.\n");
         }
     }
 
